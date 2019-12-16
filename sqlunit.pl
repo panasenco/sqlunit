@@ -1,24 +1,18 @@
+:- module(sqlunit, [table_sqlunit_sqltest/3]).
+
 :- set_prolog_flag(double_quotes, chars).
 
-/* sccg = scope, constraint, condition, group */
-sqlunit(sccg(every, [CHead|CTail], "", "")) --> "EVERY ", [CHead|CTail].
+/* sqlunit syntax (scope, constraint, condition, group) */
+sqlunit(every, [CHead|CTail], "", "") --> "EVERY ", [CHead|CTail].
 
-sql(FromExpression, sccg(every, Constraint, "", "")) --> 
+/* sql test query syntax (table, scope, constraint, condition, group) */
+sqltest(Table, every, [CHead|CTail], "", "") -->
 "SELECT
-  CASE WHEN COUNT(*) = 0 THEN 'OK' ELSE 'ERROR' END AS test_result
-FROM ", FromExpression, "
-WHERE NOT(", Constraint, ")".
+  CASE WHEN COUNT(*) = 0 THEN 'PASS' ELSE 'FAIL' END AS test_result
+FROM ", Table, "
+WHERE NOT(", [CHead|CTail], ")".
 
-from_sqlunit_sql(FromExpression, SqlUnit, Sql) :-
-    phrase(sqlunit(STCG), SqlUnit),
-    phrase(sql(FromExpression, STCG), SqlChars),
-    atom_chars(Sql, SqlChars).
-
-
-
-:- begin_tests(sqlunit).
-:- set_prolog_flag(double_quotes, chars).
-
-test(every_row) :- phrase(sqlunit(sccg(every, "x IS NOT NULL", "", "")), "EVERY x IS NOT NULL").
-
-:- end_tests(sqlunit).
+/* Relate sqlunit to SQL test query */
+table_sqlunit_sqltest(Table, SqlUnit, SqlTest) :-
+    phrase(sqlunit(Scope, Constraint, Condition, Group), SqlUnit),
+    phrase(sqltest(Table, Scope, Constraint, Condition, Group), SqlTest).
