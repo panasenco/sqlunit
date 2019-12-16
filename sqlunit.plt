@@ -35,13 +35,25 @@ sql_outstart(Sql, OutStart) :-
 
 test(every_row_truepos) :-
     once(phrase(sqldata("t", [[x],[1],[2]]), Data)),
-    once(table_sqlunit_sqltest("t", "EVERY x IS NOT NULL", SqlTest)),
+    table_sqlunit_sqltest("t", "EVERY x IS NOT NULL", SqlTest),
     append(Data, SqlTest, Sql),
     sql_outstart(Sql, "PASS").
 
 test(every_row_trueneg) :-
     once(phrase(sqldata("t", [[x],[null],[2]]), Data)),
-    once(table_sqlunit_sqltest("t", "EVERY x IS NOT NULL", SqlTest)),
+    table_sqlunit_sqltest("t", "EVERY x IS NOT NULL", SqlTest),
+    append(Data, SqlTest, Sql),
+    sql_outstart(Sql, "FAIL").
+
+test(every_group_truepos) :-
+    once(phrase(sqldata("t", [[x],[1],[2]]), Data)),
+    table_sqlunit_sqltest("t", "EVERY COUNT(*)=1 GROUP BY x", SqlTest),
+    append(Data, SqlTest, Sql),
+    sql_outstart(Sql, "PASS").
+
+test(every_group_trueneg) :-
+    once(phrase(sqldata("t", [[x],[1],[2],[1]]), Data)),
+    table_sqlunit_sqltest("t", "EVERY COUNT(*)=1 GROUP BY x", SqlTest),
     append(Data, SqlTest, Sql),
     sql_outstart(Sql, "FAIL").
 
