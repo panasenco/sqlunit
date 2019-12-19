@@ -21,9 +21,7 @@ sqldata(Table, [[HeaderH | HeaderT] | Data]) -->
 /* Relate sqlite SQL query with the beginning of its output.*/
 sql_outstart(Sql, OutStart) :-
     atom_chars(SqlAtom, Sql),
-    getenv('TMPDIR', TmpDir),
-    atom_concat(TmpDir, '/test.db', TestDB),
-    process_create(path(sqlite3), [TestDB, SqlAtom], [stdout(pipe(Out))]),
+    process_create(path(sqlite3), [':memory:', SqlAtom], [stdout(pipe(Out))]),
     read_line_to_string(Out, OutAtom),
     atom_chars(OutAtom, OutChars),
     append(OutStart, _, OutChars).
