@@ -63,4 +63,10 @@ test(sqlunit_in_result) :-
     append(Data, SqlQuery, Sql),
     sql_outstart(Sql, "PASS: EVERY x IS NOT NULL").
 
+test(sqlunit_in_result_sanitized) :-
+    once(phrase(sqldata("t", [[x],[1],[2]]), Data)),
+    table_sqlunit_sqlquery("t", "EVERY x <> 'abc'", SqlQuery),
+    append(Data, SqlQuery, Sql),
+    sql_outstart(Sql, "PASS").
+
 :- end_tests(sqlunit).

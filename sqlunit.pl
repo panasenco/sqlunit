@@ -12,6 +12,17 @@ sqlunit(every, [ConstraintH|ConstraintT], "", "") -->
 /* SQL query syntax - helpers */
 not(Condition) --> "NOT(", Condition, ")".
 
+sanitized([],[]).
+sanitized([DirtyH | DirtyT], Sanitized) :-
+    DirtyH = '\''
+    -> sanitized(DirtyT, Sanitized)
+    ; sanitized(DirtyT, SanitizedT),
+        Sanitized = [DirtyH|SanitizedT].
+
+cleansqlunit(every, Constraint, Condition, Group) -->
+    { phrase(sqlunit(every, Constraint, Condition, Group), Dirty), sanitized(Dirty, Sanitized)},
+    Sanitized.
+
 /* SQL query syntax - expression to select the count from. */
 fromexpression(Table, [ConstraintH|ConstraintT], "", "") -->
 Table, "
@@ -29,12 +40,15 @@ fromexpression(Table, [ConstraintH|ConstraintT], "", [GroupH|GroupT]) -->
 /* SQL query syntax - the entire test query. */
 sqlquery(Table, every, Constraint, Condition, Group) -->
 "SELECT
-  CASE WHEN COUNT(*) = 0 THEN 'PASS: ",
-  sqlunit(every, Constraint, Condition, Group),
-  ".' ELSE 'FAIL: ",
-  sqlunit(every, Constraint, Condition, Group),
-  ".' END AS test_result
-FROM ", fromexpression(Table, Constraint, Condition, Group).
+  CASE
+    WHEN COUNT(*) = 0 THEN 'PASS: ",
+  cleansqlunit(every, Constraint, Condition, Group), ".'
+    ELSE 'FAIL: ",
+  cleansqlunit(every, Constraint, Condition, Group),
+  ".'
+  END AS test_result
+FROM ",
+ fromexpression(Table, Constraint, Condition, Group).
 
 /* Relate sqlunit to SQL test query */
 table_sqlunit_sqlquery(Table, SqlUnit, SqlQuery) :-
