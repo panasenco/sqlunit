@@ -1,35 +1,42 @@
-:- module(sqlunit, [table_sqlunit_sqltest/3]).
+:- module(sqlunit, [table_sqlunit_sqlquery/3]).
 
 :- set_prolog_flag(double_quotes, chars).
 
-/* sqlunit syntax (scope, constraint, condition, group) */
+/* sqlunit syntax */
 sqlunit(every, [ConstraintH|ConstraintT], "", [GroupH|GroupT]) -->
-    "EVERY ", [ConstraintH|ConstraintT],
-    " GROUP BY ", [GroupH|GroupT].
-sqlunit(every, [ConstraintH|ConstraintT], "", "") --> "EVERY ", [ConstraintH|ConstraintT].
+  "EVERY ", [ConstraintH|ConstraintT],
+  " GROUP BY ", [GroupH|GroupT].
+sqlunit(every, [ConstraintH|ConstraintT], "", "") -->
+  "EVERY ", [ConstraintH|ConstraintT].
 
-/* sql test query syntax (table, scope, constraint, condition, group) */
-selectresult --> "SELECT
-  CASE WHEN COUNT(*) = 0 THEN 'PASS' ELSE 'FAIL' END AS test_result
-FROM ".
-
-where --> "
-WHERE ".
-
+/* SQL query syntax - helpers */
 not(Condition) --> "NOT(", Condition, ")".
 
-groupselect(Table, Constraint, Group) -->
+/* SQL query syntax - expression to select the count from. */
+fromexpression(Table, [ConstraintH|ConstraintT], "", "") -->
+Table, "
+WHERE ",
+not([ConstraintH|ConstraintT]).
+
+fromexpression(Table, [ConstraintH|ConstraintT], "", [GroupH|GroupT]) -->
 "(
   SELECT 1 AS dummy
   FROM ", Table, "
-  GROUP BY ", Group, "
-  HAVING ", not(Constraint), "
+  GROUP BY ", [GroupH|GroupT], "
+  HAVING ", not([ConstraintH|ConstraintT]), "
 )".
 
-sqltest(Table, every, [ConstraintH|ConstraintT], "", "") --> selectresult, Table, where, not([ConstraintH|ConstraintT]).
-sqltest(Table, every, [ConstraintH|ConstraintT], "", [GroupH|GroupT]) --> selectresult, groupselect(Table, [ConstraintH|ConstraintT], [GroupH|GroupT]).
+/* SQL query syntax - the entire test query. */
+sqlquery(Table, every, Constraint, Condition, Group) -->
+"SELECT
+  CASE WHEN COUNT(*) = 0 THEN 'PASS: ",
+  sqlunit(every, Constraint, Condition, Group),
+  ".' ELSE 'FAIL: ",
+  sqlunit(every, Constraint, Condition, Group),
+  ".' END AS test_result
+FROM ", fromexpression(Table, Constraint, Condition, Group).
 
 /* Relate sqlunit to SQL test query */
-table_sqlunit_sqltest(Table, SqlUnit, SqlTest) :-
+table_sqlunit_sqlquery(Table, SqlUnit, SqlQuery) :-
     once(phrase(sqlunit(Scope, Constraint, Condition, Group), SqlUnit)),
-    once(phrase(sqltest(Table, Scope, Constraint, Condition, Group), SqlTest)).
+    once(phrase(sqlquery(Table, Scope, Constraint, Condition, Group), SqlQuery)).
