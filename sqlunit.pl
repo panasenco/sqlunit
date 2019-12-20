@@ -1,6 +1,20 @@
 :- module(sqlunit, [table_sqlunit_sqlquery/3]).
 
+:- use_module(library(option)).
+:- use_module(library(optparse)).
+
+:- initialization(main, main).
 :- set_prolog_flag(double_quotes, chars).
+
+/* sqlunit script */
+main(Args) :-
+    opt_parse([[opt(table), type(atom), shortflags([t]), longflags([table])]], Args, Opts, [SqlUnit]),
+    option(table(Table), Opts),
+    atom(Table),
+    table_sqlunit_sqlquery(Table, SqlUnit, SqlQuery),
+    format('~w', SqlQuery).
+main(_) :-
+    halt(1).
 
 /* sqlunit syntax */
 sqlunit(every, [ConstraintH|ConstraintT], "", [GroupH|GroupT]) -->
@@ -52,5 +66,8 @@ FROM ",
 
 /* Relate sqlunit to SQL test query */
 table_sqlunit_sqlquery(Table, SqlUnit, SqlQuery) :-
-    once(phrase(sqlunit(Scope, Constraint, Condition, Group), SqlUnit)),
-    once(phrase(sqlquery(Table, Scope, Constraint, Condition, Group), SqlQuery)).
+    atom_chars(Table, TableChars),
+    atom_chars(SqlUnit, SqlUnitChars),
+    once(phrase(sqlunit(Scope, Constraint, Condition, Group), SqlUnitChars)),
+    once(phrase(sqlquery(TableChars, Scope, Constraint, Condition, Group), SqlQueryChars)),
+    atom_chars(SqlQuery, SqlQueryChars).
