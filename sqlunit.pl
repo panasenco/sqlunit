@@ -16,11 +16,12 @@ main(Args) :-
 main(_) :-
     halt(1).
 
-/* sqlunit syntax */
-sqlunit(every, [ConstraintH|ConstraintT], "", [GroupH|GroupT]) -->
+/* sqlunit syntax (sccg = scope constraint condition group) */
+sqlunit([SCCG1, SCCG2 | Tail]) --> sqlunit([SCCG1]), "; ", sqlunit([SCCG2|Tail]).
+sqlunit([sccg(every, [ConstraintH|ConstraintT], "", [GroupH|GroupT])]) -->
   "EVERY ", [ConstraintH|ConstraintT],
   " GROUP BY ", [GroupH|GroupT].
-sqlunit(every, [ConstraintH|ConstraintT], "", "") -->
+sqlunit([sccg(every, [ConstraintH|ConstraintT], "", "")]) -->
   "EVERY ", [ConstraintH|ConstraintT].
 
 /* SQL query syntax - helpers */
@@ -34,7 +35,7 @@ sanitized([DirtyH | DirtyT], Sanitized) :-
         Sanitized = [DirtyH|SanitizedT].
 
 cleansqlunit(every, Constraint, Condition, Group) -->
-    { phrase(sqlunit(every, Constraint, Condition, Group), Dirty), sanitized(Dirty, Sanitized)},
+    { phrase(sqlunit([sccg(every, Constraint, Condition, Group)]), Dirty), sanitized(Dirty, Sanitized)},
     Sanitized.
 
 /* SQL query syntax - expression to select the count from. */
@@ -52,13 +53,17 @@ fromexpression(Table, [ConstraintH|ConstraintT], "", [GroupH|GroupT]) -->
 )".
 
 /* SQL query syntax - the entire test query. */
-sqlquery(Table, every, Constraint, Condition, Group) -->
+sqlquery(Table, [SCCG1, SCCG2 | Tail]) --> sqlquery(Table, [SCCG1]), "
+UNION ALL
+", sqlquery(Table, [SCCG2|Tail]).
+
+sqlquery(Table, [sccg(every, Constraint, Condition, Group)]) -->
 "SELECT
   CASE
     WHEN COUNT(*) = 0 THEN 'PASS: ",
-  cleansqlunit(every, Constraint, Condition, Group), ".'
+    cleansqlunit(every, Constraint, Condition, Group), ".'
     ELSE 'FAIL: ",
-  cleansqlunit(every, Constraint, Condition, Group),
+    cleansqlunit(every, Constraint, Condition, Group),
   ".'
   END AS test_result
 FROM ",
@@ -68,6 +73,6 @@ FROM ",
 table_sqlunit_sqlquery(Table, SqlUnit, SqlQuery) :-
     atom_chars(Table, TableChars),
     atom_chars(SqlUnit, SqlUnitChars),
-    once(phrase(sqlunit(Scope, Constraint, Condition, Group), SqlUnitChars)),
-    once(phrase(sqlquery(TableChars, Scope, Constraint, Condition, Group), SqlQueryChars)),
+    once(phrase(sqlunit(SCCGs), SqlUnitChars)),
+    once(phrase(sqlquery(TableChars, SCCGs), SqlQueryChars)),
     atom_chars(SqlQuery, SqlQueryChars).
