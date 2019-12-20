@@ -17,7 +17,7 @@ main(_) :-
     halt(1).
 
 /* sqlunit syntax (sccg = scope constraint condition group) */
-sqlunit([SCCG1, SCCG2 | Tail]) --> sqlunit([SCCG1]), "; ", sqlunit([SCCG2|Tail]).
+/* sqlunit([SCCG1, SCCG2 | Tail]) --> sqlunit([SCCG1]), "; ", sqlunit([SCCG2|Tail]). */
 sqlunit([sccg(every, [ConstraintH|ConstraintT], "", [GroupH|GroupT])]) -->
   "EVERY ", [ConstraintH|ConstraintT],
   " GROUP BY ", [GroupH|GroupT].
@@ -50,7 +50,7 @@ fromexpression(Table, [ConstraintH|ConstraintT], "", [GroupH|GroupT]) -->
   FROM ", Table, "
   GROUP BY ", [GroupH|GroupT], "
   HAVING ", not([ConstraintH|ConstraintT]), "
-)".
+) g".
 
 /* SQL query syntax - the entire test query. */
 sqlquery(Table, [SCCG1, SCCG2 | Tail]) --> sqlquery(Table, [SCCG1]), "
@@ -61,10 +61,9 @@ sqlquery(Table, [sccg(every, Constraint, Condition, Group)]) -->
 "SELECT
   CASE
     WHEN COUNT(*) = 0 THEN 'PASS: ",
-    cleansqlunit(every, Constraint, Condition, Group), ".'
+    cleansqlunit(every, Constraint, Condition, Group), " in ", Table, "'
     ELSE 'FAIL: ",
-    cleansqlunit(every, Constraint, Condition, Group),
-  ".'
+    cleansqlunit(every, Constraint, Condition, Group), " in ", Table, "'
   END AS test_result
 FROM ",
  fromexpression(Table, Constraint, Condition, Group).
