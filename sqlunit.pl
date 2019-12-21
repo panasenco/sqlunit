@@ -1,12 +1,14 @@
 :- module(sqlunit, [table_sqlunit_sqlquery/3]).
 
+:- use_module(library(dcg/basics), [blanks/2]).
+:- use_module(library(dcg_util)).
 :- use_module(library(option)).
 :- use_module(library(optparse)).
 
 :- initialization(main, main).
 :- set_prolog_flag(double_quotes, chars).
 
-/* sqlunit script */
+/* sqlunit command line */
 main(Args) :-
     opt_parse([[opt(table), type(atom), shortflags([t]), longflags([table])]], Args, Opts, [SqlUnit]),
     option(table(Table), Opts),
@@ -16,13 +18,26 @@ main(Args) :-
 main(_) :-
     halt(1).
 
-/* sqlunit syntax (sccg = scope constraint condition group) */
-/* sqlunit([SCCG1, SCCG2 | Tail]) --> sqlunit([SCCG1]), "; ", sqlunit([SCCG2|Tail]). */
-sqlunit([sccg(every, [ConstraintH|ConstraintT], "", [GroupH|GroupT])]) -->
-  "EVERY ", [ConstraintH|ConstraintT],
-  " GROUP BY ", [GroupH|GroupT].
-sqlunit([sccg(every, [ConstraintH|ConstraintT], "", "")]) -->
-  "EVERY ", [ConstraintH|ConstraintT].
+/* sqlunit syntax */
+char(C) --> [C].
+
+token(scope-every) --> "EVERY".
+token(scope-some) --> "SOME".
+token(condition) --> "WHERE".
+token(group) --> "GROUP ", blanks, "BY".
+
+segment(_, "", Opts) --> "", {\+ option(mandatory, Opts)}.
+segment(Type, [ParamH|ParamT], Opts) -->
+    ({option(first, Opts)} -> ""; " "), blanks,
+    token(Type),
+    " ", blanks,
+    generous(char, [ParamH|ParamT]).
+
+sqlunit([SCCG1, SCCG2 | Tail]) --> sqlunit([SCCG1]), blanks, ";", blanks, sqlunit([SCCG2|Tail]).
+sqlunit([sccg(Scope, Constraint, Condition, Group)]) -->
+    segment(scope-Scope, Constraint, [mandatory, first]),
+    segment(condition, Condition, []),
+    segment(group, Group, []).
 
 /* SQL query syntax - helpers */
 not(Condition) --> "NOT(", Condition, ")".
@@ -66,7 +81,7 @@ sqlquery(Table, [sccg(every, Constraint, Condition, Group)]) -->
     cleansqlunit(every, Constraint, Condition, Group), " in ", Table, "'
   END AS test_result
 FROM ",
- fromexpression(Table, Constraint, Condition, Group).
+    fromexpression(Table, Constraint, Condition, Group).
 
 /* Relate sqlunit to SQL test query */
 table_sqlunit_sqlquery(Table, SqlUnit, SqlQuery) :-

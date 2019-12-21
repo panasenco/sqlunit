@@ -74,10 +74,10 @@ test(sqlunit_in_result_sanitized) :-
     atomic_concat(SqlCreate, SqlQuery, Sql),
     sql_outbegs(Sql, ["PASS"]).
 
-/* test(multiple) :-
+test(multiple) :-
     table_data_create(t, [[x],[1],[1]], SqlCreate),
-    table_sqlunit_sqlquery(t, 'EVERY x IS NOT NULL; EVERY COUNT(*)=1 GROUP BY x', SqlQuery),
+    table_sqlunit_sqlquery(t, 'EVERY x IS NOT NULL; EVERY COUNT(*)=1 GROUP BY x; EVERY x=1', SqlQuery),
     atomic_concat(SqlCreate, SqlQuery, Sql),
-    sql_outbegs(Sql, ["PASS","FAIL"]). */
+    sql_outbegs(Sql, ["PASS","FAIL","PASS"]).
 
 :- end_tests(sqlunit).
