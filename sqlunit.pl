@@ -17,7 +17,7 @@ main(Args) :-
 main(_) :-
     halt(1).
 
-/* sqlunit syntax */
+/* sqlunit helpers */
 
 /* Whitespace - Equivalent of regex \s special character */
 s --> " ".
@@ -29,7 +29,8 @@ s --> "\r".
 ss --> "".
 ss --> s, ss.
 
-char(C) --> [C].
+generous_discard("", _) --> "".
+generous_discard([C|Cs], Discard) --> ({member(C, Discard)} -> ""; [C]), generous_discard(Cs, Discard).
 
 token(scope-every) --> "EVERY".
 token(scope-some) --> "SOME".
@@ -41,30 +42,22 @@ segment(Type, [ParamH|ParamT], Opts) -->
     ({option(first, Opts)} -> ""; s), ss,
     token(Type),
     s, ss,
-    generous(char, [ParamH|ParamT]).
+    {option(discard(Discard), Opts, "")},
+    generous_discard([ParamH|ParamT], Discard).
 
-sqlunit([SCCG1, SCCG2 | Tail]) --> sqlunit([SCCG1]), ";", ss, sqlunit([SCCG2|Tail]).
-sqlunit([sccg(Scope, Constraint, Condition, Group)]) -->
-    segment(scope-Scope, Constraint, [mandatory, first]),
-    segment(condition, Condition, []),
-    segment(group, Group, []),
+/* sqlunit syntax */
+sqlunit(SCCGs) --> sqlunit(SCCGs, []).
+sqlunit([SCCG1, SCCG2 | Tail], Opts) --> sqlunit([SCCG1], Opts), ";", ss, sqlunit([SCCG2|Tail], Opts).
+sqlunit([sccg(Scope, Constraint, Condition, Group)], Opts) -->
+    segment(scope-Scope, Constraint, [mandatory, first | Opts]),
+    segment(condition, Condition, Opts),
+    segment(group, Group, Opts),
     ss.
 
-/* SQL query syntax - helpers */
+/* SQL query helpers */
 not(Condition) --> "NOT(", Condition, ")".
 
-sanitized([],[]).
-sanitized([DirtyH | DirtyT], Sanitized) :-
-    DirtyH = '\''
-    -> sanitized(DirtyT, Sanitized)
-    ; sanitized(DirtyT, SanitizedT),
-        Sanitized = [DirtyH|SanitizedT].
-
-cleansqlunit(every, Constraint, Condition, Group) -->
-    { phrase(sqlunit([sccg(every, Constraint, Condition, Group)]), Dirty), sanitized(Dirty, Sanitized)},
-    Sanitized.
-
-/* SQL query syntax - expression to select the count from. */
+/* Expression to select the count from. */
 fromexpression(Table, [ConstraintH|ConstraintT], "", "") -->
 Table, "
 WHERE ",
@@ -87,9 +80,9 @@ sqlquery(Table, [sccg(every, Constraint, Condition, Group)]) -->
 "SELECT
   CASE
     WHEN COUNT(*) = 0 THEN 'PASS: ",
-    cleansqlunit(every, Constraint, Condition, Group), " in ", Table, "'
+    sqlunit([sccg(every, Constraint, Condition, Group)], [discard("'")]), " in ", Table, "'
     ELSE 'FAIL: ",
-    cleansqlunit(every, Constraint, Condition, Group), " in ", Table, "'
+    sqlunit([sccg(every, Constraint, Condition, Group)], [discard("'")]), " in ", Table, "'
   END AS test_result
 FROM ",
     fromexpression(Table, Constraint, Condition, Group).
