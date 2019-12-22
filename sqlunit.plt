@@ -87,4 +87,10 @@ test(whitespace) :-
     atomic_concat(SqlCreate, SqlQuery, Sql),
     sql_outbegs(Sql, ["PASS","FAIL"]).
 
+test(some) :-
+    table_data_create(t, [[x],[1],[2],[2],[3]], SqlCreate),
+    table_sqlunit_sqlquery(t, 'SOME x = 2; SOME x=4; SOME COUNT(*) = 2 GROUP BY x; SOME COUNT(*) = 0 GROUP BY x', SqlQuery),
+    atomic_concat(SqlCreate, SqlQuery, Sql),
+    sql_outbegs(Sql, ["PASS","FAIL","PASS","FAIL"]).
+
 :- end_tests(sqlunit).

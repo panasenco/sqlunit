@@ -1,6 +1,5 @@
 :- module(sqlunit, [table_sqlunit_sqlquery/3]).
 
-:- use_module(library(dcg_util)).
 :- use_module(library(option)).
 :- use_module(library(optparse)).
 
@@ -55,20 +54,24 @@ sqlunit([sccg(Scope, Constraint, Condition, Group)], Opts) -->
     ss.
 
 /* SQL query helpers */
-not(Condition) --> "NOT(", Condition, ")".
+test(every, Condition) --> "NOT(", Condition, ")".
+test(some, Condition) --> Condition.
+
+countcomparison(every) --> " = 0".
+countcomparison(some) --> " >= 1".
 
 /* Expression to select the count from. */
-fromexpression(Table, [ConstraintH|ConstraintT], "", "") -->
+fromexpression(Scope, Table, [ConstraintH|ConstraintT], "", "") -->
 Table, "
 WHERE ",
-not([ConstraintH|ConstraintT]).
+test(Scope, [ConstraintH|ConstraintT]).
 
-fromexpression(Table, [ConstraintH|ConstraintT], "", [GroupH|GroupT]) -->
+fromexpression(Scope, Table, [ConstraintH|ConstraintT], "", [GroupH|GroupT]) -->
 "(
   SELECT 1 AS dummy
   FROM ", Table, "
   GROUP BY ", [GroupH|GroupT], "
-  HAVING ", not([ConstraintH|ConstraintT]), "
+  HAVING ", test(Scope, [ConstraintH|ConstraintT]), "
 ) g".
 
 /* SQL query syntax - the entire test query. */
@@ -76,16 +79,16 @@ sqlquery(Table, [SCCG1, SCCG2 | Tail]) --> sqlquery(Table, [SCCG1]), "
 UNION ALL
 ", sqlquery(Table, [SCCG2|Tail]).
 
-sqlquery(Table, [sccg(every, Constraint, Condition, Group)]) -->
+sqlquery(Table, [sccg(Scope, Constraint, Condition, Group)]) -->
 "SELECT
   CASE
-    WHEN COUNT(*) = 0 THEN 'PASS: ",
-    sqlunit([sccg(every, Constraint, Condition, Group)], [discard("'")]), " in ", Table, "'
+    WHEN COUNT(*)", countcomparison(Scope), " THEN 'PASS: ",
+    sqlunit([sccg(Scope, Constraint, Condition, Group)], [discard("'")]), " in ", Table, "'
     ELSE 'FAIL: ",
-    sqlunit([sccg(every, Constraint, Condition, Group)], [discard("'")]), " in ", Table, "'
+    sqlunit([sccg(Scope, Constraint, Condition, Group)], [discard("'")]), " in ", Table, "'
   END AS test_result
 FROM ",
-    fromexpression(Table, Constraint, Condition, Group).
+    fromexpression(Scope, Table, Constraint, Condition, Group).
 
 /* Relate sqlunit to SQL test query */
 table_sqlunit_sqlquery(Table, SqlUnit, SqlQuery) :-
