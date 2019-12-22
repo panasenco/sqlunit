@@ -1,6 +1,5 @@
 :- module(sqlunit, [table_sqlunit_sqlquery/3]).
 
-:- use_module(library(dcg/basics), [blanks/2]).
 :- use_module(library(dcg_util)).
 :- use_module(library(option)).
 :- use_module(library(optparse)).
@@ -19,25 +18,37 @@ main(_) :-
     halt(1).
 
 /* sqlunit syntax */
+
+/* Whitespace - Equivalent of regex \s special character */
+s --> " ".
+s --> "\t".
+s --> "\n".
+s --> "\r".
+
+/* Any number of whitespace characters - equivalent to regex \s* */
+ss --> "".
+ss --> s, ss.
+
 char(C) --> [C].
 
 token(scope-every) --> "EVERY".
 token(scope-some) --> "SOME".
 token(condition) --> "WHERE".
-token(group) --> "GROUP ", blanks, "BY".
+token(group) --> "GROUP", s, ss, "BY".
 
 segment(_, "", Opts) --> "", {\+ option(mandatory, Opts)}.
 segment(Type, [ParamH|ParamT], Opts) -->
-    ({option(first, Opts)} -> ""; " "), blanks,
+    ({option(first, Opts)} -> ""; s), ss,
     token(Type),
-    " ", blanks,
+    s, ss,
     generous(char, [ParamH|ParamT]).
 
-sqlunit([SCCG1, SCCG2 | Tail]) --> sqlunit([SCCG1]), blanks, ";", blanks, sqlunit([SCCG2|Tail]).
+sqlunit([SCCG1, SCCG2 | Tail]) --> sqlunit([SCCG1]), ";", ss, sqlunit([SCCG2|Tail]).
 sqlunit([sccg(Scope, Constraint, Condition, Group)]) -->
     segment(scope-Scope, Constraint, [mandatory, first]),
     segment(condition, Condition, []),
-    segment(group, Group, []).
+    segment(group, Group, []),
+    ss.
 
 /* SQL query syntax - helpers */
 not(Condition) --> "NOT(", Condition, ")".
