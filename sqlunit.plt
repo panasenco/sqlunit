@@ -33,63 +33,75 @@ sql_outbegs(Sql, OutBegs) :-
     sql_outchars(Sql, OutChars),
     once(chars_linebegs(OutChars, OutBegs)).
 
+
 /* End-to-end tests */
 :- begin_tests(sqlunit).
 :- use_module(sqlunit).
 :- set_prolog_flag(double_quotes, chars).
 
+/* Put inference limit on the tests */
+tss(Table, SqlUnit, SqlQuery) :-
+    R = '!',
+    call_with_inference_limit(table_sqlunit_sqlquery(Table, SqlUnit, SqlQuery), 9999, R).
+
 test(every_row_truepos) :-
     table_data_create(t, [[x],[1],[2]], SqlCreate),
-    table_sqlunit_sqlquery(t, 'EVERY x IS NOT NULL', SqlQuery),
+    tss(t, 'EVERY x IS NOT NULL', SqlQuery),
     atomic_concat(SqlCreate, SqlQuery, Sql),
     sql_outbegs(Sql, ["PASS"]).
 
 test(every_row_trueneg) :-
     table_data_create(t, [[x],[null],[2]], SqlCreate),
-    table_sqlunit_sqlquery(t, 'EVERY x IS NOT NULL', SqlQuery),
+    tss(t, 'EVERY x IS NOT NULL', SqlQuery),
     atomic_concat(SqlCreate, SqlQuery, Sql),
     sql_outbegs(Sql, ["FAIL"]).
 
 test(every_group_truepos) :-
     table_data_create(t, [[x],[1],[2]], SqlCreate),
-    table_sqlunit_sqlquery(t, 'EVERY COUNT(*)=1 GROUP BY x', SqlQuery),
+    tss(t, 'EVERY COUNT(*)=1 GROUP BY x', SqlQuery),
     atomic_concat(SqlCreate, SqlQuery, Sql),
     sql_outbegs(Sql, ["PASS"]).
 
 test(every_group_trueneg) :-
     table_data_create(t, [[x],[1],[2],[1]], SqlCreate),
-    table_sqlunit_sqlquery(t, 'EVERY COUNT(*)=1 GROUP BY x', SqlQuery),
+    tss(t, 'EVERY COUNT(*)=1 GROUP BY x', SqlQuery),
     atomic_concat(SqlCreate, SqlQuery, Sql),
     sql_outbegs(Sql, ["FAIL"]).
 
 test(sqlunit_in_result) :-
     table_data_create(t, [[x],[1],[2]], SqlCreate),
-    table_sqlunit_sqlquery(t, 'EVERY x IS NOT NULL', SqlQuery),
+    tss(t, 'EVERY x IS NOT NULL', SqlQuery),
     atomic_concat(SqlCreate, SqlQuery, Sql),
     sql_outbegs(Sql, ["PASS: EVERY x IS NOT NULL"]).
 
 test(sqlunit_in_result_sanitized) :-
     table_data_create(t, [[x],[1],[2]], SqlCreate),
-    table_sqlunit_sqlquery(t, 'EVERY x <> \'abc\'', SqlQuery),
+    tss(t, 'EVERY x <> \'abc\'', SqlQuery),
     atomic_concat(SqlCreate, SqlQuery, Sql),
     sql_outbegs(Sql, ["PASS"]).
 
 test(multiple) :-
     table_data_create(t, [[x],[1],[1]], SqlCreate),
-    table_sqlunit_sqlquery(t, 'EVERY x IS NOT NULL; EVERY COUNT(*)=1 GROUP BY x; EVERY x=1', SqlQuery),
+    tss(t, 'EVERY x IS NOT NULL; EVERY COUNT(*)=1 GROUP BY x; EVERY x=1', SqlQuery),
     atomic_concat(SqlCreate, SqlQuery, Sql),
     sql_outbegs(Sql, ["PASS","FAIL","PASS"]).
 
 test(whitespace) :-
     table_data_create(t, [[x],[1],[1]], SqlCreate),
-    table_sqlunit_sqlquery(t, '    EVERY 	 x  IS NOT	 NULL  ;
+    tss(t, '    EVERY 	 x  IS NOT	 NULL  ;
     EVERY  COUNT(*)=1    GROUP	BY x   ', SqlQuery),
     atomic_concat(SqlCreate, SqlQuery, Sql),
     sql_outbegs(Sql, ["PASS","FAIL"]).
 
 test(some) :-
     table_data_create(t, [[x],[1],[2],[2],[3]], SqlCreate),
-    table_sqlunit_sqlquery(t, 'SOME x = 2; SOME x=4; SOME COUNT(*) = 2 GROUP BY x; SOME COUNT(*) = 0 GROUP BY x', SqlQuery),
+    tss(t, 'SOME x = 2; SOME x=4; SOME COUNT(*) = 2 GROUP BY x; SOME COUNT(*) = 0 GROUP BY x', SqlQuery),
+    atomic_concat(SqlCreate, SqlQuery, Sql),
+    sql_outbegs(Sql, ["PASS","FAIL","PASS","FAIL"]).
+
+test(condition) :-
+    table_data_create(t, [[x,y],[1,1],[2,1],[2,null],[null,2]], SqlCreate),
+    tss(t, 'EVERY x IS NOT NULL WHERE y=1; SOME x = \'a\' WHERE y = 1; EVERY COUNT(*) = 1 WHERE y=1 GROUP BY x; SOME COUNT(*) = 2 WHERE y IS NOT NULL GROUP BY x', SqlQuery),
     atomic_concat(SqlCreate, SqlQuery, Sql),
     sql_outbegs(Sql, ["PASS","FAIL","PASS","FAIL"]).
 
