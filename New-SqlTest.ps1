@@ -55,12 +55,10 @@ process {
         $Table = "$($Prefix[0])$FileBaseName"
     }
     # Extract sqlunit statements from the file
-    $SqlUnits = (($File | Get-Content -Raw) -replace "`r|`n" | Select-String -AllMatches -Pattern `
-        '(?<=/\*\s*\[\s*UNIT\s*\]\s*)[^\s](\*(?!\/)|[^*])*[^\s](?=\s*\*/)').Matches.Value -join ';' -split '\s*;\s*'
-    $SqlUnits | foreach {
-        $Sql = (swipl "$SqlUnitPl" --table "$Table" "$_") -join "`r`n"
-        if ($SqlQuery -and $Sql) { $SqlQuery += "`r`nUNION ALL`r`n" + $Sql } elseif ($Sql) { $SqlQuery = $Sql }
-    }
+    $SqlUnit = (($File | Get-Content -Raw) -replace "`r|`n" | Select-String -AllMatches -Pattern `
+        '(?<=/\*\s*\[\s*UNIT\s*\]\s*)[^\s](\*(?!\/)|[^*])*[^\s](?=\s*\*/)').Matches.Value -join ';'
+    $Sql = (swipl "$SqlUnitPl" --table "$Table" "$SqlUnit") -join "`r`n"
+    if ($SqlQuery -and $Sql) { $SqlQuery += "`r`nUNION ALL`r`n" + $Sql } elseif ($Sql) { $SqlQuery = $Sql }
 }
 end {
     # The test name is the basename of the deepest common path
