@@ -21,6 +21,11 @@ main(_) :-
 
 /* Whitespace - Equivalent of regex \s special character */
 s(C) --> [C], {member(C,[' ','\t','\n','\r'])}.
+/* Whitespace - Equivalent of regex \s* */
+ss --> generous(s, _).
+
+/* Digit - Equivalent of regex \d special character */
+d(C) --> [C], {member(C,"0123456789")}.
 
 /* A segment is a leading space followed by a keyword followed by a string.
    The string is matched generously (non-greedily) when parsing. Options:
@@ -34,17 +39,18 @@ generous_discard([C|Cs], Discard) --> ({member(C, Discard)} -> ""; [C]), generou
 segment(KeywordGoal, String) --> segment(KeywordGoal, String, []).
 segment(_, "", Opts) --> "", {\+ option(mandatory, Opts)}.
 segment(KeywordGoal, [Char|Chars], Opts) -->
-    ({option(noleadspace, Opts)} -> ""; s(_)), generous(s, _),
+    ({option(noleadspace, Opts)} -> ""; s(_)), ss,
     call(KeywordGoal),
-    s(_), generous(s, _),
+    s(_), ss,
     {option(discard(Discard), Opts, [])},
     generous_discard([Char|Chars], Discard).
 
 /* sqlunit syntax */
 unitkey(scope-every) --> "EVERY".
 unitkey(scope-some) --> "SOME".
+unitkey(scope-range([Min|Mins], [Max|Maxs])) --> "RANGE", ss, "(", ss, d(Min), generous(d,Mins), ss, "-", ss, d(Max), generous(d, Maxs), ss, ")".
 unitkey(condition) --> "WHERE".
-unitkey(group) --> "GROUP", s(_), generous(s, _), "BY".
+unitkey(group) --> "GROUP", s(_), ss, "BY".
 
 sqlunit(SCCGs) --> sqlunit(SCCGs, []).
 sqlunit([SCCG1, SCCG2 | Tail], Opts) --> sqlunit([SCCG1], Opts), ";", sqlunit([SCCG2|Tail], Opts).
@@ -52,7 +58,7 @@ sqlunit([sccg(Scope, Constraint, Condition, Group)], Opts) -->
     segment(unitkey(scope-Scope), Constraint, [mandatory, noleadspace | Opts]),
     segment(unitkey(condition), Condition, Opts),
     segment(unitkey(group), Group, Opts),
-    generous(s, _).
+    ss.
 
 /* SQL query helpers */
 sqlkey(and) --> "AND".
@@ -61,9 +67,11 @@ WHERE".
 
 test(every, Condition) --> "NOT(", Condition, ")".
 test(some, Condition) --> Condition.
+test(range(_,_), Condition) --> Condition.
 
-countcomparison(every) --> " = 0".
-countcomparison(some) --> " >= 1".
+testexpr(every) --> "COUNT(*) = 0".
+testexpr(some) --> "COUNT(*) >= 1".
+testexpr(range(Min, Max)) --> "COUNT(*) >= ", Min, " AND COUNT(*) <= ", Max.
 
 /* Expression to select the count from. */
 fromexpression(Scope, Table, [ConstraintH|ConstraintT], Condition, "") -->
@@ -89,7 +97,7 @@ UNION ALL
 sqlquery(Table, [sccg(Scope, Constraint, Condition, Group)]) -->
 "SELECT
   CASE
-    WHEN COUNT(*)", countcomparison(Scope), " THEN 'PASS: ",
+    WHEN ", testexpr(Scope), " THEN 'PASS: ",
     sqlunit([sccg(Scope, Constraint, Condition, Group)], [discard(['\''])]), " in ", Table, "'
     ELSE 'FAIL: ",
     sqlunit([sccg(Scope, Constraint, Condition, Group)], [discard(['\''])]), " in ", Table, "'

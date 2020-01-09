@@ -105,4 +105,10 @@ test(condition) :-
     atomic_concat(SqlCreate, SqlQuery, Sql),
     sql_outbegs(Sql, ["PASS","FAIL","PASS","FAIL"]).
 
+test(range) :-
+    table_data_create(t, [[x,y],[1,1],[2,1],[2,null],[null,2]], SqlCreate),
+    tss(t, 'RANGE( 2 -3) x=2; RANGE (0- 1) x=2; RANGE  (  0-0)   x IS NOT NULL; RANGE(0-1) x=2 WHERE y IS NOT NULL', SqlQuery),
+    atomic_concat(SqlCreate, SqlQuery, Sql),
+    sql_outbegs(Sql, ["PASS","FAIL","FAIL","PASS"]).
+
 :- end_tests(sqlunit).
