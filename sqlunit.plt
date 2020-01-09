@@ -41,8 +41,7 @@ sql_outbegs(Sql, OutBegs) :-
 
 /* Put inference limit on the tests */
 tss(Table, SqlUnit, SqlQuery) :-
-    R = '!',
-    call_with_inference_limit(table_sqlunit_sqlquery(Table, SqlUnit, SqlQuery), 9999, R).
+    call_with_inference_limit(table_sqlunit_sqlquery(Table, SqlUnit, SqlQuery), 9999, '!').
 
 test(every_row_truepos) :-
     table_data_create(t, [[x],[1],[2]], SqlCreate),
@@ -110,5 +109,11 @@ test(range) :-
     tss(t, 'RANGE( 2 -3) x=2; RANGE (0- 1) x=2; RANGE  (  0-0)   x IS NOT NULL; RANGE(0-1) x=2 WHERE y IS NOT NULL', SqlQuery),
     atomic_concat(SqlCreate, SqlQuery, Sql),
     sql_outbegs(Sql, ["PASS","FAIL","FAIL","PASS"]).
+
+test(rangepercent) :-
+    table_data_create(t, [[x,y],[1,1],[2,1],[2,null],[null,2]], SqlCreate),
+    tss(t, 'RANGE( 62.5-80.1%) x IS NOT NULL; RANGE ( 40 % - 60 % ) x=2 WHERE y IS NOT NULL; RANGE  (  0-100%)   x = 4; RANGE(50%-50%) x=1 WHERE y=1', SqlQuery),
+    atomic_concat(SqlCreate, SqlQuery, Sql),
+    sql_outbegs(Sql, ["PASS","FAIL","PASS","PASS"]).
 
 :- end_tests(sqlunit).
