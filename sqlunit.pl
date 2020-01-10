@@ -20,9 +20,8 @@ main(_) :-
 
 /* sqlunit helpers */
 
-/* Optional - Equivalent of regex + */
-o(_) --> "".
-o(C) --> C.
+/* DCG that always fails */
+false(_,_) :- false.
 
 /* Whitespace - Equivalent of regex \s special character */
 s(C) --> [C], {member(C,[' ','\t','\n','\r'])}.
@@ -33,8 +32,8 @@ ss --> generous(s, _).
 d(C) --> [C], {member(C,"0123456789.")}.
 
 /* Number with type - Distinguishes between numbers and percentages */
+num([D|Ds], percent) --> d(D), generous(d, Ds), ss, "%".
 num([D|Ds], num) --> d(D), generous(d, Ds).
-num([D|Ds], percent) --> num([D|Ds], num), ss, "%".
 
 /* A segment is a keyword followed by a string.  The string is matched generously (non-greedily) when parsing. Options:
      * mandatory: Disallows empty segment. Default behavior allows empty segments.
@@ -47,15 +46,18 @@ segment(KeywordGoal, [Char|Chars], Opts) -->
     [Char|Chars].
 
 /* sqlunit syntax */
-unitkey(scope-every) --> "EVERY".
-unitkey(scope-some) --> "SOME".
-unitkey(scope-range(Min, MinType, Max, MaxType)) --> "RANGE", ss, "(", ss, num(Min, MinType), ss, "-", ss, num(Max, MaxType), ss, ")".
+range(Num, NumType, Num, NumType) --> parsing -> false; num(Num, NumType).
+range(Min, MinType, Max, MaxType) --> num(Min, MinType), ss, "-", ss, num(Max, MaxType).
+range(Num, NumType, Num, NumType) --> num(Num, NumType).
+
+unitkey(constraint) --> "".
 unitkey(condition) --> "WHERE".
 unitkey(group) --> "GROUP", s(_), ss, "BY".
 
 sqlunit([SCCG1, SCCG2 | Tail]) --> sqlunit([SCCG1]), ";", sqlunit([SCCG2|Tail]).
-sqlunit([sccg(Scope, Constraint, Condition, Group)]) -->
-    segment(unitkey(scope-Scope), Constraint, [mandatory]),
+sqlunit([sccg(range(Min, MinType, Max, MaxType), Constraint, Condition, Group)]) -->
+    ss, range(Min, MinType, Max, MaxType),
+    segment(unitkey(constraint), Constraint), /* no leadspace because of the space after the empty keyword */
     segment(unitkey(condition), Condition, [leadspace]),
     segment(unitkey(group), Group, [leadspace]),
     ss.
@@ -66,38 +68,40 @@ discard([C|Cs], Discard) --> ({member(C, Discard)} -> ""; [C]), discard(Cs, Disc
 
 sqlkey(where) --> "
 WHERE".
-sqlkey(having) --> "
-HAVING".
-sqlkey(and) --> "AND".
 
-test(every, Condition) --> "NOT(", Condition, ")".
-test(some, Condition) --> Condition.
-test(range(_,_,_,_), _) --> "".
+testnum(Num, num, _) --> Num.
+testnum(Num, percent, zero) --> Num, "/100.0*COUNT(*)".
+testnum(Num, percent, minus) --> testnum(Num, percent, zero), "-0.00001".
+testnum(Num, percent, plus) --> testnum(Num, percent, zero), "+0.00001".
 
-testexpr(every, _) --> "COUNT(*) = 0".
-testexpr(some, _) --> "COUNT(*) >= 1".
-testexpr(range(Min, MinType, Max, MaxType), Constraint) -->
-    "SUM(CASE WHEN ", Constraint, " THEN 1 ELSE 0 END)",
-    ({MinType=percent} -> "*100.0/COUNT(*)"; ""), " >= ", Min,
-    " AND SUM(CASE WHEN ", Constraint, " THEN 1 ELSE 0 END)",
-    ({MaxType=percent} -> "*100.0/COUNT(*)"; ""), " <= ", Max.
+testpass("", _) --> "COUNT(*)".
+testpass([Constraint|Constraints], "") --> "SUM(CASE WHEN ", [Constraint|Constraints], " THEN 1 ELSE 0 END)".
+testpass([_|_], [_|_]) --> "SUM(pass)".
+
+testexpr(range(['1','0','0'|_], percent, ['1','0','0'|_], percent), Constraint, Group) -->
+    testpass(Constraint, Group), " = COUNT(*)".
+testexpr(range(Num, num, Num, num), Constraint, Group) --> testpass(Constraint, Group), " = ", Num.
+testexpr(range(Num, percent, Num, percent), Constraint, Group) -->
+    "ABS(", testpass(Constraint, Group), " - ", testnum(Num, percent, zero), ") < 0.00001".
+testexpr(range(Min, MinType, ['1','0','0'|_], percent), Constraint, Group) -->
+    testpass(Constraint, Group), " >= ", testnum(Min, MinType, minus).
+testexpr(range(0, _, Max, MaxType), Constraint, Group) -->
+    testpass(Constraint, Group), " <= ", testnum(Max, MaxType, plus).
+testexpr(range(Min, MinType, Max, MaxType), Constraint, Group) -->
+    testpass(Constraint, Group), " >= ", testnum(Min, MinType, minus),
+    " AND ", testpass(Constraint, Group), " <= ", testnum(Max, MaxType, plus).
 
 /* Expression to select the count from. */
-fromexpression(Scope, Table, [ConstraintH|ConstraintT], Condition, "") -->
+fromexpression(Table, _, Condition, "") -->
 Table,
-{phrase(test(Scope, [ConstraintH|ConstraintT]), Test)},
-segment(sqlkey(where), Test),
-{Test="" -> CondKey=where; CondKey=and},
-segment(sqlkey(CondKey), Condition, [leadspace]).
+segment(sqlkey(where), Condition).
 
-fromexpression(Scope, Table, [ConstraintH|ConstraintT], Condition, [GroupH|GroupT]) -->
+fromexpression(Table, [Constraint|Constraints], Condition, [GroupH|GroupT]) -->
 "(
-  SELECT 1 AS dummy
+  SELECT CASE WHEN ", [Constraint|Constraints], " THEN 1 ELSE 0 END AS pass
   FROM ", Table,
   segment(sqlkey(where), Condition), "
-  GROUP BY ", [GroupH|GroupT],
-  {phrase(test(Scope, [ConstraintH|ConstraintT]), Test)},
-  segment(sqlkey(having), Test), "
+  GROUP BY ", [GroupH|GroupT], "
 ) g".
 
 /* SQL query syntax - the entire test query. */
@@ -105,15 +109,16 @@ sqlquery(Table, [SCCG1, SCCG2 | Tail]) --> sqlquery(Table, [SCCG1]), "
 UNION ALL
 ", sqlquery(Table, [SCCG2|Tail]).
 
-sqlquery(Table, [sccg(Scope, Constraint, Condition, Group)]) -->
-{once(phrase(sqlunit([sccg(Scope, Constraint, Condition, Group)]), SqlUnit)), phrase(discard(SqlUnit, "'"), SanitizedSqlUnit)},
+sqlquery(Table, [sccg(Range, Constraint, Condition, Group)]) -->
+    {phrase(sqlunit([sccg(Range, Constraint, Condition, Group)]), SqlUnit),
+    phrase(discard(SqlUnit, "'"), SanitizedSqlUnit)},
 "SELECT
   CASE
-    WHEN ", testexpr(Scope, Constraint), " THEN 'PASS: ", SanitizedSqlUnit, " in ", Table, "'
+    WHEN ", testexpr(Range, Constraint, Group), " THEN 'PASS: ", SanitizedSqlUnit, " in ", Table, "'
     ELSE 'FAIL: ", SanitizedSqlUnit, " in ", Table, "'
   END AS test_result
 FROM ",
-    fromexpression(Scope, Table, Constraint, Condition, Group).
+    fromexpression(Table, Constraint, Condition, Group).
 
 /* Relate sqlunit to SQL test query */
 table_sqlunit_sqlquery(Table, SqlUnit, SqlQuery) :-
