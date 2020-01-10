@@ -32,6 +32,10 @@ ss --> generous(s, _).
 /* Digit - Equivalent of regex \d special character */
 d(C) --> [C], {member(C,"0123456789.")}.
 
+/* Number with type - Distinguishes between numbers and percentages */
+num([D|Ds], num) --> d(D), generous(d, Ds).
+num([D|Ds], percent) --> num([D|Ds], num), ss, "%".
+
 /* A segment is a keyword followed by a string.  The string is matched generously (non-greedily) when parsing. Options:
      * mandatory: Disallows empty segment. Default behavior allows empty segments.
      * leadspace: Makes leading space before keyword required. */
@@ -45,8 +49,7 @@ segment(KeywordGoal, [Char|Chars], Opts) -->
 /* sqlunit syntax */
 unitkey(scope-every) --> "EVERY".
 unitkey(scope-some) --> "SOME".
-unitkey(scope-range([Min|Mins], [Max|Maxs], count)) --> "RANGE", ss, "(", ss, d(Min), generous(d,Mins), ss, "-", ss, d(Max), generous(d, Maxs), ss, ")".
-unitkey(scope-range([Min|Mins], [Max|Maxs], percent)) --> "RANGE", ss, "(", ss, d(Min), generous(d,Mins), ss, o("%"), ss, "-", ss, d(Max), generous(d, Maxs), ss, "%", ss, ")".
+unitkey(scope-range(Min, MinType, Max, MaxType)) --> "RANGE", ss, "(", ss, num(Min, MinType), ss, "-", ss, num(Max, MaxType), ss, ")".
 unitkey(condition) --> "WHERE".
 unitkey(group) --> "GROUP", s(_), ss, "BY".
 
@@ -63,17 +66,21 @@ discard([C|Cs], Discard) --> ({member(C, Discard)} -> ""; [C]), discard(Cs, Disc
 
 sqlkey(where) --> "
 WHERE".
+sqlkey(having) --> "
+HAVING".
 sqlkey(and) --> "AND".
 
 test(every, Condition) --> "NOT(", Condition, ")".
 test(some, Condition) --> Condition.
-test(range(_,_,count), Condition) --> Condition.
-test(range(_,_,percent), _) --> "".
+test(range(_,_,_,_), _) --> "".
 
 testexpr(every, _) --> "COUNT(*) = 0".
 testexpr(some, _) --> "COUNT(*) >= 1".
-testexpr(range(Min, Max, count), _) --> "COUNT(*) >= ", Min, " AND COUNT(*) <= ", Max.
-testexpr(range(Min, Max, percent), Constraint) --> "SUM(CASE WHEN ", Constraint, " THEN 1 ELSE 0 END)*100.0/COUNT(*) >= ", Min, " AND SUM(CASE WHEN ", Constraint, " THEN 1 ELSE 0 END)*100.0/COUNT(*) <= ", Max.
+testexpr(range(Min, MinType, Max, MaxType), Constraint) -->
+    "SUM(CASE WHEN ", Constraint, " THEN 1 ELSE 0 END)",
+    ({MinType=percent} -> "*100.0/COUNT(*)"; ""), " >= ", Min,
+    " AND SUM(CASE WHEN ", Constraint, " THEN 1 ELSE 0 END)",
+    ({MaxType=percent} -> "*100.0/COUNT(*)"; ""), " <= ", Max.
 
 /* Expression to select the count from. */
 fromexpression(Scope, Table, [ConstraintH|ConstraintT], Condition, "") -->
@@ -88,8 +95,9 @@ fromexpression(Scope, Table, [ConstraintH|ConstraintT], Condition, [GroupH|Group
   SELECT 1 AS dummy
   FROM ", Table,
   segment(sqlkey(where), Condition), "
-  GROUP BY ", [GroupH|GroupT], "
-  HAVING ", test(Scope, [ConstraintH|ConstraintT]), "
+  GROUP BY ", [GroupH|GroupT],
+  {phrase(test(Scope, [ConstraintH|ConstraintT]), Test)},
+  segment(sqlkey(having), Test), "
 ) g".
 
 /* SQL query syntax - the entire test query. */

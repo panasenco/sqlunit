@@ -112,8 +112,14 @@ test(range) :-
 
 test(rangepercent) :-
     table_data_create(t, [[x,y],[1,1],[2,1],[2,null],[null,2]], SqlCreate),
-    tss(t, 'RANGE( 62.5-80.1%) x IS NOT NULL; RANGE ( 40 % - 60 % ) x=2 WHERE y IS NOT NULL; RANGE  (  0-100%)   x = 4; RANGE(50%-50%) x=1 WHERE y=1', SqlQuery),
+    tss(t, 'RANGE( 62.5%-80.1%) x IS NOT NULL; RANGE ( 40 % - 60 % ) x=2 WHERE y IS NOT NULL; RANGE  (  0-100%)   x = 4; RANGE(50%-50%) x=1 WHERE y=1', SqlQuery),
     atomic_concat(SqlCreate, SqlQuery, Sql),
     sql_outbegs(Sql, ["PASS","FAIL","PASS","PASS"]).
+
+test(rangegroup) :-
+    table_data_create(t, [[x,y],[1,1],[2,1],[2,null],[2,2]], SqlCreate),
+    tss(t, 'RANGE(1-2) COUNT(*)=2 GROUP BY y; RANGE (0-50%) COUNT(*)=1 GROUP BY x; RANGE  (40%-50%) COUNT(*)=2 GROUP BY y', SqlQuery),
+    atomic_concat(SqlCreate, SqlQuery, Sql),
+    sql_outbegs(Sql, ["PASS","PASS","FAIL"]).
 
 :- end_tests(sqlunit).
