@@ -134,8 +134,29 @@ test(rowcount) :-
 
 test(rangeedge) :-
     table_data_create(t, [[x,y],[1,1],[2,1],[2,null],[2,2]], SqlCreate),
-    tss(t, '2 x=2; 1 y IS NULL; 25% x=1; 50% y=2; 0-100% x=99; 0-72% y IS NOT NULL; 0-2 x=1; 3-99% x IS NOT NULL; 2-75% x=2', SqlQuery),
+    tss(t, '2 x=2; 1 y IS NULL; 25% x=1; 50% y=2; 0-100% x=99; 0-72% y IS NOT NULL; 0-2 x=1; 3-99% x IS NOT NULL;
+        2-75% x=2', SqlQuery),
     atomic_concat(SqlCreate, SqlQuery, Sql),
     sql_outbegs(Sql, ["FAIL","PASS","PASS","FAIL","PASS","FAIL","PASS","FAIL","PASS"]).
+
+test(inforeign) :-
+    table_data_create('aux.t1', [[x,y],[1,1],[2,1],[2,null],[2,2]], SqlCreate1),
+    table_data_create(t2, [[x],[1],[null],[2]], SqlCreate2),
+    atomic_concat(SqlCreate1, SqlCreate2, SqlCreate3),
+    atomic_concat('ATTACH DATABASE \':memory:\' AS aux;\n', SqlCreate3, SqlCreate),
+    tss(t2, '100% x IN (SELECT x FROM aux.t1); 100% x IN (SELECT y FROM t1);
+        100% x IN (SELECT y FROM aux.t1) WHERE t2.x IS NOT NULL; 60%-100% x IN (SELECT x FROM aux.t1)', SqlQuery),
+    atomic_concat(SqlCreate, SqlQuery, Sql),
+    sql_outbegs(Sql, ["FAIL","FAIL","PASS","PASS"]).
+    
+test(inforeign_optimized) :-
+    table_data_create('aux.t1', [[x,y],[1,1],[2,1],[2,null],[2,2]], SqlCreate1),
+    table_data_create(t2, [[x],[1],[null],[2]], SqlCreate2),
+    atomic_concat(SqlCreate1, SqlCreate2, SqlCreate3),
+    atomic_concat('ATTACH DATABASE \':memory:\' AS aux;\n', SqlCreate3, SqlCreate),
+    tss(t2, '100% x IN (SELECT y FROM aux.t1)', SqlQuery),
+    once(sub_atom(SqlQuery, _, _, _, 'WHEN SUM(CASE WHEN aux.t1.y IS NOT NULL THEN 1 ELSE 0 END) = COUNT(*)')),
+    atomic_concat(SqlCreate, SqlQuery, Sql),
+    sql_outbegs(Sql, ["FAIL"]).
 
 :- end_tests(sqlunit).

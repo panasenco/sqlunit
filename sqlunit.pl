@@ -25,11 +25,15 @@ false(_,_) :- false.
 
 /* Whitespace - Equivalent of regex \s special character */
 s(C) --> [C], {member(C,[' ','\t','\n','\r'])}.
+s --> s(_).
 /* Whitespace - Equivalent of regex \s* */
 ss --> generous(s, _).
 
-/* Digit - Equivalent of regex \d special character */
+/* Digit - Equivalent of regex [\d\.] */
 d(C) --> [C], {member(C,"0123456789.")}.
+
+/* Word - Equivalent of regex [\w\.] */
+w(C) --> [C], {member(C,"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_.")}.
 
 /* Number with type - Distinguishes between numbers and percentages */
 num([D|Ds], percent) --> d(D), generous(d, Ds), ss, "%".
@@ -41,8 +45,8 @@ num([D|Ds], num) --> d(D), generous(d, Ds).
 segment(KeywordGoal, String) --> segment(KeywordGoal, String, []).
 segment(_, "", Opts) --> "", {\+ option(mandatory, Opts)}.
 segment(KeywordGoal, [Char|Chars], Opts) -->
-    ({option(leadspace, Opts)} -> s(_); ""), ss,
-    call(KeywordGoal), s(_), ss,
+    ({option(leadspace, Opts)} -> s; ""), ss,
+    call(KeywordGoal), s, ss,
     [Char|Chars].
 
 /* sqlunit syntax */
@@ -52,7 +56,7 @@ range(Num, NumType, Num, NumType) --> num(Num, NumType).
 
 unitkey(constraint) --> "".
 unitkey(condition) --> "WHERE".
-unitkey(group) --> "GROUP", s(_), ss, "BY".
+unitkey(group) --> "GROUP", s, ss, "BY".
 
 sqlunit([SCCG1, SCCG2 | Tail]) --> sqlunit([SCCG1]), ";", sqlunit([SCCG2|Tail]).
 sqlunit([sccg(range(Min, MinType, Max, MaxType), Constraint, Condition, Group)]) -->
@@ -69,12 +73,21 @@ discard([C|Cs], Discard) --> ({member(C, Discard)} -> ""; [C]), discard(Cs, Disc
 sqlkey(where) --> "
 WHERE".
 
+/* Determine constraint type for optimization purposes */
+constrainttype(inforeign(SelfKey, ForeignTable, ForeignKey)) -->
+    ss, at_least(1,w,SelfKey), s, ss, "IN", s,
+    ss, "(", ss, "SELECT", s, ss, at_least(1,w,ForeignKey), s, ss, "FROM", s, ss, at_least(1,w,ForeignTable), ss, ")".
+constrainttype(other) --> [_|_].
+
 testnum(Num, num, _) --> Num.
 testnum(Num, percent, zero) --> Num, "/100.0*COUNT(*)".
 testnum(Num, percent, minus) --> testnum(Num, percent, zero), "-0.00001".
 testnum(Num, percent, plus) --> testnum(Num, percent, zero), "+0.00001".
 
 testpass("", _) --> "COUNT(*)".
+testpass([Constraint|Constraints], "") -->
+    { phrase(constrainttype(inforeign(_, ForeignTable, ForeignKey)), [Constraint|Constraints]) },
+    "SUM(CASE WHEN ", ForeignTable, ".", ForeignKey, " IS NOT NULL THEN 1 ELSE 0 END)".
 testpass([Constraint|Constraints], "") --> "SUM(CASE WHEN ", [Constraint|Constraints], " THEN 1 ELSE 0 END)".
 testpass([_|_], [_|_]) --> "SUM(pass)".
 
@@ -92,6 +105,12 @@ testexpr(range(Min, MinType, Max, MaxType), Constraint, Group) -->
     " AND ", testpass(Constraint, Group), " <= ", testnum(Max, MaxType, plus).
 
 /* Expression to select the count from. */
+fromexpression(Table, Constraint, Condition, "") -->
+{ phrase(constrainttype(inforeign(SelfKey, ForeignTable, ForeignKey)), Constraint) },
+Table,"
+LEFT JOIN ", ForeignTable, " ON ", Table, ".", SelfKey, " = ", ForeignTable, ".", ForeignKey,
+segment(sqlkey(where), Condition).
+
 fromexpression(Table, _, Condition, "") -->
 Table,
 segment(sqlkey(where), Condition).
