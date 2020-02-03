@@ -4,14 +4,14 @@
 .Description
     Parses view definition files for /* [UNIT] ... */ comments, extracts the contents of those comments, and passes
     them to [sqlunit](https://github.com/panasenco/sqlunit). See the sqlunit README for syntax and optimizations.
-.Parameter File
+.Parameter Path
     File to generate unit tests for. If you want to generate unit tests for multiple files, you have to pass them
     through the pipeline.
 .Parameter Prefix
     Use <prefix>.<file basename> as the table to pass to sqlunit to select from.
     If this parameter is a list, it is assumed to be of the form <mainprefix>,<secondaryprefix>, where mainprefix
     is applied to the file named exactly like its parent directory, and secondaryprefix is applied to all other files.
-.Paramater Suffix
+.Parameter Suffix
     Append provided suffix to all table names
 .Example
     Get-ChildItem .\Research\EpicOnCoreDiscreps\*.sql | New-SqlTest
@@ -19,7 +19,7 @@
 [CmdletBinding()]
 param (
     [Parameter(Mandatory=$true, Position=0, ValueFromPipeline=$true)]
-    [System.IO.FileInfo] $File,
+    [System.IO.FileInfo] $Path,
     [string[]] $Prefix = "",
     [string] $Suffix = ""
 )
@@ -41,7 +41,7 @@ begin {
 process {
     # Find the deepest path that's common to all the files (https://rosettacode.org/wiki/Find_common_directory_path)
     # Get the current file's path list
-    $PathList =  $File.FullName -split "\$([IO.Path]::DirectorySeparatorChar)"
+    $PathList =  $Path.FullName -split "\$([IO.Path]::DirectorySeparatorChar)"
     # Get the most common path list
     if ($CommonPathList) {
         $CommonPathList = (Compare-Object -ReferenceObject $CommonPathList -DifferenceObject $PathList -IncludeEqual `
@@ -58,7 +58,7 @@ process {
         $Table = "$($Prefix[0])$FileBaseName$Suffix"
     }
     # Extract sqlunit statements from the file
-    $SqlUnit = ((Get-Content -Raw -Path $File) -replace "`r|`n" | Select-String -AllMatches -Pattern `
+    $SqlUnit = ((Get-Content -Raw -Path $Path) -replace "`r|`n" | Select-String -AllMatches -Pattern `
         '(?<=/\*\s*\[\s*UNIT\s*\]\s*)[^\s](\*(?!\/)|[^*])*[^\s](?=\s*\*/)').Matches.Value -join ';'
     $Sql = (swipl "$SqlUnitPl" --table "$Table" "$SqlUnit") -join "`r`n"
     if ($SqlQuery -and $Sql) { $SqlQuery += "`r`nUNION ALL`r`n" + $Sql } elseif ($Sql) { $SqlQuery = $Sql }
