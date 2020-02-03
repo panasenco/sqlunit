@@ -70,8 +70,9 @@ sqlunit([sccg(range(Min, MinType, Max, MaxType), Constraint, Condition, Group)])
 discard("", _) --> "".
 discard([C|Cs], Discard) --> ({member(C, Discard)} -> ""; [C]), discard(Cs, Discard).
 
-sqlkey(where) --> "
-WHERE".
+sqlkey(where) --> sqlkey(where, 0).
+sqlkey(where, IndentN) --> "
+", exactly(IndentN, s), "WHERE".
 
 /* Determine constraint type for optimization purposes */
 constrainttype(inforeign(SelfKey, ForeignTable, ForeignKey)) -->
@@ -119,7 +120,7 @@ fromexpression(Table, [Constraint|Constraints], Condition, [GroupH|GroupT]) -->
 "(
   SELECT CASE WHEN ", [Constraint|Constraints], " THEN 1 ELSE 0 END AS pass
   FROM ", Table,
-  segment(sqlkey(where), Condition), "
+  segment(sqlkey(where,2), Condition), "
   GROUP BY ", [GroupH|GroupT], "
 ) g".
 
