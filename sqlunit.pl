@@ -1,4 +1,4 @@
-:- module(sqlunit, [table_sqlunit_sqlquery/3]).
+:- module(sqlunit, [unit_query/3]).
 
 :- use_module(library(option)).
 :- use_module(library(optparse)).
@@ -10,10 +10,16 @@
 
 /* sqlunit command line */
 main(Args) :-
-    opt_parse([[opt(table), type(atom), shortflags([t]), longflags([table])]], Args, Opts, [SqlUnit]),
-    option(table(Table), Opts),
-    atom(Table),
-    table_sqlunit_sqlquery(Table, SqlUnit, SqlQuery),
+    opt_parse(
+        [
+            [opt(table), type(atom), shortflags([t]), longflags([table])],
+            [opt(style), type(atom), shortflags([s]), longflags([style])]
+        ],
+        Args,
+        Opts,
+        [SqlUnit]
+    ),
+    unit_query(SqlUnit, SqlQuery, Opts),
     format('~w', SqlQuery).
 main(_) :-
     halt(1).
@@ -105,6 +111,15 @@ testexpr(range(Min, MinType, Max, MaxType), Constraint, Group) -->
     testpass(Constraint, Group), " >= ", testnum(Min, MinType, minus),
     " AND ", testpass(Constraint, Group), " <= ", testnum(Max, MaxType, plus).
 
+queryoutput(Status, Message, Table, Style) -->
+    {Style=simple}, ({Status = pass} -> "PASS: "; "FAIL: "), Message, " in ", Table.
+
+queryoutput(Status, Message, Table, Style) -->
+    {Style=junit},
+    "<testcase name=\"", Message, " in ", Table, "\">",
+    ({Status = pass} -> ""; "<failure/>"),
+    "</testcase>".
+
 /* Expression to select the count from. */
 fromexpression(Table, Constraint, Condition, "") -->
 { phrase(constrainttype(inforeign(SelfKey, ForeignTable, ForeignKey)), Constraint) },
@@ -125,25 +140,30 @@ fromexpression(Table, [Constraint|Constraints], Condition, [GroupH|GroupT]) -->
 ) g".
 
 /* SQL query syntax - the entire test query. */
-sqlquery(Table, [SCCG1, SCCG2 | Tail]) --> sqlquery(Table, [SCCG1]), "
+sqlquery([SCCG1, SCCG2 | Tail], Opts) --> sqlquery([SCCG1], Opts), "
 UNION ALL
-", sqlquery(Table, [SCCG2|Tail]).
+", sqlquery([SCCG2|Tail], Opts).
 
-sqlquery(Table, [sccg(Range, Constraint, Condition, Group)]) -->
-    {phrase(sqlunit([sccg(Range, Constraint, Condition, Group)]), SqlUnit),
-    phrase(discard(SqlUnit, "'"), SanitizedSqlUnit)},
+sqlquery([sccg(Range, Constraint, Condition, Group)], Opts) -->
+    {
+        phrase(sqlunit([sccg(Range, Constraint, Condition, Group)]), SqlUnit),
+        phrase(discard(SqlUnit, "'"), SanitizedSqlUnit),
+        option(table(TableAtom), Opts),
+        atom(TableAtom),
+        atom_chars(TableAtom, Table),
+        option(style(Style), Opts, simple)
+    },
 "SELECT
   CASE
-    WHEN ", testexpr(Range, Constraint, Group), " THEN 'PASS: ", SanitizedSqlUnit, " in ", Table, "'
-    ELSE 'FAIL: ", SanitizedSqlUnit, " in ", Table, "'
+    WHEN ", testexpr(Range, Constraint, Group), " THEN '", queryoutput(pass, SanitizedSqlUnit, Table, Style), "'
+    ELSE '", queryoutput(fail, SanitizedSqlUnit, Table, Style), "'
   END AS test_result
 FROM ",
     fromexpression(Table, Constraint, Condition, Group).
 
 /* Relate sqlunit to SQL test query */
-table_sqlunit_sqlquery(Table, SqlUnit, SqlQuery) :-
-    atom_chars(Table, TableChars),
+unit_query(SqlUnit, SqlQuery, Opts) :-
     atom_chars(SqlUnit, SqlUnitChars),
     once(phrase(sqlunit(SCCGs), SqlUnitChars)),
-    once(phrase(sqlquery(TableChars, SCCGs), SqlQueryChars)),
+    once(phrase(sqlquery(SCCGs, Opts), SqlQueryChars)),
     atom_chars(SqlQuery, SqlQueryChars).

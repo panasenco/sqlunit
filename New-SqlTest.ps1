@@ -13,6 +13,8 @@
     is applied to the file named exactly like its parent directory, and secondaryprefix is applied to all other files.
 .Parameter Suffix
     Append provided suffix to all table names
+.Parameter JUnit
+    Set this switch to use JUnit style in test output. The default output format is simple 'PASS: ...'/'FAIL: ...'.
 .Example
     Get-ChildItem .\Research\EpicOnCoreDiscreps\*.sql | New-SqlTest
 #>
@@ -21,7 +23,8 @@ param (
     [Parameter(Mandatory=$true, Position=0, ValueFromPipeline=$true)]
     [System.IO.FileInfo] $Path,
     [string[]] $Prefix = "",
-    [string] $Suffix = ""
+    [string] $Suffix = "",
+    [switch] $JUnit
 )
 begin {
     # Try to get the user's name and email for the header.
@@ -60,7 +63,8 @@ process {
     # Extract sqlunit statements from the file
     $SqlUnit = ((Get-Content -Raw -Path $Path) -replace "`r|`n" | Select-String -AllMatches -Pattern `
         '(?<=/\*\s*\[\s*UNIT\s*\]\s*)[^\s](\*(?!\/)|[^*])*[^\s](?=\s*\*/)').Matches.Value -join ';'
-    $Sql = (swipl "$SqlUnitPl" --table "$Table" "$SqlUnit") -join "`r`n"
+    $Sql = (swipl "$SqlUnitPl" --table "$Table" --style "$(if($Junit) { 'junit' } else { 'simple' })" "$SqlUnit") `
+        -join "`r`n"
     if ($SqlQuery -and $Sql) { $SqlQuery += "`r`nUNION ALL`r`n" + $Sql } elseif ($Sql) { $SqlQuery = $Sql }
 }
 end {
