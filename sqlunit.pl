@@ -120,6 +120,21 @@ queryoutput(Status, Message, Table, Style) -->
     ({Status = pass} -> ""; "<failure/>"),
     "</testcase>".
 
+queryoutput(Status, Message, Table, Style) -->
+    {
+        Style=nunit,
+        phrase(discard(Table, "."), SanitizedTable),
+        phrase(discard(Message, "."), SanitizedMessage)
+    },
+    "<test-case name=\"sqlunit.", SanitizedTable, ".", SanitizedMessage, "\" executed=\"True\" success=\"",
+    ({Status = pass} -> "True"; "False"),
+    "\"/>".
+
+queryoutput(Status, Message, Table, Style) -->
+    {Style=mocha},
+    "{ \"title\": \"", Message, " in ", Table, "\", ",
+    "\"state\": \"", ({Status = pass} -> "passed"; "failed"), "\" },".
+
 /* Expression to select the count from. */
 fromexpression(Table, Constraint, Condition, "") -->
 { phrase(constrainttype(inforeign(SelfKey, ForeignTable, ForeignKey)), Constraint) },

@@ -170,4 +170,16 @@ test(junit_simple) :-
     atomic_concat(SqlCreate, SqlQuery, Sql),
     sql_outbegs(Sql, ["<testcase","<testcase"]).
 
+test(nunit_simple) :-
+    table_data_create(t, [[x,y],[1,1],[2,1],[2,null],[2,2]], SqlCreate),
+    uq('2 x=2; 1 y IS NULL', SqlQuery, [table(t), style(junit)]),
+    atomic_concat(SqlCreate, SqlQuery, Sql),
+    sql_outbegs(Sql, ["<test-case","<test-case"]).
+
+test(mocha_simple) :-
+    table_data_create(t, [[x,y],[1,1],[2,1],[2,null],[2,2]], SqlCreate),
+    uq('2 x=2; 1 y IS NULL', SqlQuery, [table(t), style(mocha)]),
+    atomic_concat(SqlCreate, SqlQuery, Sql),
+    sql_outbegs(Sql, ["{ \"title","{ \"title"]).
+
 :- end_tests(sqlunit).
