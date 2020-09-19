@@ -124,7 +124,7 @@ queryoutput(Status, Message, Table, Style) -->
     {
         Style=nunit,
         phrase(discard(Table, "."), SanitizedTable),
-        phrase(discard(Message, "."), SanitizedMessage)
+        phrase(discard(Message, ".<"), SanitizedMessage)
     },
     "<test-case name=\"sqlunit.", SanitizedTable, ".", SanitizedMessage, "\" executed=\"True\" success=\"",
     ({Status = pass} -> "True"; "False"),
