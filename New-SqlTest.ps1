@@ -69,6 +69,7 @@ process {
     if ($SqlQuery -and $Sql) { $SqlQuery += "`r`nUNION ALL`r`n" + $Sql } elseif ($Sql) { $SqlQuery = $Sql }
 }
 end {
+    if (-not $SqlQuery) { return }
     # The name of the object being tested is the basename of the deepest common path
     $ObjectName = ($CommonPathList[-1] | Select-String -Pattern '[\w]+').Matches[0].Value
     # Finally, generate the output
